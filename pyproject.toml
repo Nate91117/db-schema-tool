@@ -1,0 +1,23 @@
+[project]
+name = "db-schema-tool"
+version = "0.2.0"
+description = "Database schema discovery tool — AI-assisted semantic layer builder"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.40.0",
+    "pymssql>=2.2.0",
+    "pyodbc>=4.0.0",
+    "python-dotenv>=1.0.0",
+    "supermemory>=0.1.0",
+]
+
+[project.scripts]
+dbscan = "crawler.cli:main"
+dbscan-report = "crawler.report:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=24.0.0",
+    "ruff>=0.4.0",
+]
