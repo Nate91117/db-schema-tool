@@ -1,0 +1,141 @@
+2026-04-14 15:45:22  INFO      Logging initialised — file: dbscan.log
+2026-04-14 15:45:22  INFO      Run started — industry=general batch_delay=1.0s checkpoint=stage2_checkpoint.json log=dbscan.log
+2026-04-14 15:51:06  INFO      Batch 1/15: starting — tables: [IRGNAssemblyGradeWORK, IRGNTicketDetailWORK, IRGNTicketDiscountWORK, IRGNTicketFreightWORK, IRGNTicketGradeWORK, IRGNTicketOwnerWORK, IRGNTicketScaleWORK, IRGNTktDetailPriceWORK, IRCSBatchHIST, IRGNAssemblyDiscWORK, IRGNAssemblyHDRWORK, IRGNContractProgramWORK, IRGNDPRPricedHIST, IRGNFinalInvoiceWH, IRGNLoadShipmentDiscWH, IRGNLoadShipmentDtlWH, IRGNLoadShipmentFrtWH, IRGNLoadShipmentHIST, IRGNLoadShipmentHISTCOMP, IRGNLoadShipmentInquiry]
+2026-04-14 15:51:06  INFO      Batch 1/15: API call attempt 1 — tables: [IRGNAssemblyGradeWORK, IRGNTicketDetailWORK, IRGNTicketDiscountWORK, IRGNTicketFreightWORK, IRGNTicketGradeWORK, IRGNTicketOwnerWORK, IRGNTicketScaleWORK, IRGNTktDetailPriceWORK, IRCSBatchHIST, IRGNAssemblyDiscWORK, IRGNAssemblyHDRWORK, IRGNContractProgramWORK, IRGNDPRPricedHIST, IRGNFinalInvoiceWH, IRGNLoadShipmentDiscWH, IRGNLoadShipmentDtlWH, IRGNLoadShipmentFrtWH, IRGNLoadShipmentHIST, IRGNLoadShipmentHISTCOMP, IRGNLoadShipmentInquiry]
+2026-04-14 15:51:09  WARNING   Batch 1/15: Transient error on attempt 1 — CONNECTION_ERROR: Connection error.
+2026-04-14 15:51:09  WARNING   Batch 1/15: Retry 1/5 in 10s (previous: CONNECTION_ERROR)
+2026-04-14 15:51:19  INFO      Batch 1/15: API call attempt 2 — tables: [IRGNAssemblyGradeWORK, IRGNTicketDetailWORK, IRGNTicketDiscountWORK, IRGNTicketFreightWORK, IRGNTicketGradeWORK, IRGNTicketOwnerWORK, IRGNTicketScaleWORK, IRGNTktDetailPriceWORK, IRCSBatchHIST, IRGNAssemblyDiscWORK, IRGNAssemblyHDRWORK, IRGNContractProgramWORK, IRGNDPRPricedHIST, IRGNFinalInvoiceWH, IRGNLoadShipmentDiscWH, IRGNLoadShipmentDtlWH, IRGNLoadShipmentFrtWH, IRGNLoadShipmentHIST, IRGNLoadShipmentHISTCOMP, IRGNLoadShipmentInquiry]
+2026-04-14 15:51:21  WARNING   Batch 1/15: Transient error on attempt 2 — CONNECTION_ERROR: Connection error.
+2026-04-14 15:51:21  WARNING   Batch 1/15: Retry 2/5 in 20s (previous: CONNECTION_ERROR)
+2026-04-14 15:51:41  INFO      Batch 1/15: API call attempt 3 — tables: [IRGNAssemblyGradeWORK, IRGNTicketDetailWORK, IRGNTicketDiscountWORK, IRGNTicketFreightWORK, IRGNTicketGradeWORK, IRGNTicketOwnerWORK, IRGNTicketScaleWORK, IRGNTktDetailPriceWORK, IRCSBatchHIST, IRGNAssemblyDiscWORK, IRGNAssemblyHDRWORK, IRGNContractProgramWORK, IRGNDPRPricedHIST, IRGNFinalInvoiceWH, IRGNLoadShipmentDiscWH, IRGNLoadShipmentDtlWH, IRGNLoadShipmentFrtWH, IRGNLoadShipmentHIST, IRGNLoadShipmentHISTCOMP, IRGNLoadShipmentInquiry]
+2026-04-14 15:51:43  WARNING   Batch 1/15: Transient error on attempt 3 — CONNECTION_ERROR: Connection error.
+2026-04-14 15:51:43  WARNING   Batch 1/15: Retry 3/5 in 40s (previous: CONNECTION_ERROR)
+2026-04-14 15:52:23  INFO      Batch 1/15: API call attempt 4 — tables: [IRGNAssemblyGradeWORK, IRGNTicketDetailWORK, IRGNTicketDiscountWORK, IRGNTicketFreightWORK, IRGNTicketGradeWORK, IRGNTicketOwnerWORK, IRGNTicketScaleWORK, IRGNTktDetailPriceWORK, IRCSBatchHIST, IRGNAssemblyDiscWORK, IRGNAssemblyHDRWORK, IRGNContractProgramWORK, IRGNDPRPricedHIST, IRGNFinalInvoiceWH, IRGNLoadShipmentDiscWH, IRGNLoadShipmentDtlWH, IRGNLoadShipmentFrtWH, IRGNLoadShipmentHIST, IRGNLoadShipmentHISTCOMP, IRGNLoadShipmentInquiry]
+2026-04-14 15:52:25  WARNING   Batch 1/15: Transient error on attempt 4 — CONNECTION_ERROR: Connection error.
+2026-04-14 15:52:25  WARNING   Batch 1/15: Retry 4/5 in 80s (previous: CONNECTION_ERROR)
+2026-04-14 15:53:45  INFO      Batch 1/15: API call attempt 5 — tables: [IRGNAssemblyGradeWORK, IRGNTicketDetailWORK, IRGNTicketDiscountWORK, IRGNTicketFreightWORK, IRGNTicketGradeWORK, IRGNTicketOwnerWORK, IRGNTicketScaleWORK, IRGNTktDetailPriceWORK, IRCSBatchHIST, IRGNAssemblyDiscWORK, IRGNAssemblyHDRWORK, IRGNContractProgramWORK, IRGNDPRPricedHIST, IRGNFinalInvoiceWH, IRGNLoadShipmentDiscWH, IRGNLoadShipmentDtlWH, IRGNLoadShipmentFrtWH, IRGNLoadShipmentHIST, IRGNLoadShipmentHISTCOMP, IRGNLoadShipmentInquiry]
+2026-04-14 15:53:47  WARNING   Batch 1/15: Transient error on attempt 5 — CONNECTION_ERROR: Connection error.
+2026-04-14 15:53:47  WARNING   Batch 1/15: Retry 5/5 in 120s (previous: CONNECTION_ERROR)
+2026-04-14 15:55:47  INFO      Batch 1/15: API call attempt 6 — tables: [IRGNAssemblyGradeWORK, IRGNTicketDetailWORK, IRGNTicketDiscountWORK, IRGNTicketFreightWORK, IRGNTicketGradeWORK, IRGNTicketOwnerWORK, IRGNTicketScaleWORK, IRGNTktDetailPriceWORK, IRCSBatchHIST, IRGNAssemblyDiscWORK, IRGNAssemblyHDRWORK, IRGNContractProgramWORK, IRGNDPRPricedHIST, IRGNFinalInvoiceWH, IRGNLoadShipmentDiscWH, IRGNLoadShipmentDtlWH, IRGNLoadShipmentFrtWH, IRGNLoadShipmentHIST, IRGNLoadShipmentHISTCOMP, IRGNLoadShipmentInquiry]
+2026-04-14 15:55:48  ERROR     Batch 1/15: All 6 attempts failed.
+  Last error class: CONNECTION_ERROR
+  Tables: [IRGNAssemblyGradeWORK, IRGNTicketDetailWORK, IRGNTicketDiscountWORK, IRGNTicketFreightWORK, IRGNTicketGradeWORK, IRGNTicketOwnerWORK, IRGNTicketScaleWORK, IRGNTktDetailPriceWORK, IRCSBatchHIST, IRGNAssemblyDiscWORK, IRGNAssemblyHDRWORK, IRGNContractProgramWORK, IRGNDPRPricedHIST, IRGNFinalInvoiceWH, IRGNLoadShipmentDiscWH, IRGNLoadShipmentDtlWH, IRGNLoadShipmentFrtWH, IRGNLoadShipmentHIST, IRGNLoadShipmentHISTCOMP, IRGNLoadShipmentInquiry]
+  Exception: APIConnectionError: Connection error.
+  Full traceback:
+NoneType: None
+
+2026-04-14 15:55:50  ERROR     Batch 1/15 FAILED — CONNECTION_ERROR
+  Tables: [IRGNAssemblyGradeWORK, IRGNTicketDetailWORK, IRGNTicketDiscountWORK, IRGNTicketFreightWORK, IRGNTicketGradeWORK, IRGNTicketOwnerWORK, IRGNTicketScaleWORK, IRGNTktDetailPriceWORK, IRCSBatchHIST, IRGNAssemblyDiscWORK, IRGNAssemblyHDRWORK, IRGNContractProgramWORK, IRGNDPRPricedHIST, IRGNFinalInvoiceWH, IRGNLoadShipmentDiscWH, IRGNLoadShipmentDtlWH, IRGNLoadShipmentFrtWH, IRGNLoadShipmentHIST, IRGNLoadShipmentHISTCOMP, IRGNLoadShipmentInquiry]
+  Exception: APIConnectionError: Connection error.
+  Traceback:
+Traceback (most recent call last):
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpx\_transports\default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpcore\_sync\connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpcore\_sync\connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+        pool_request.request
+    )
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpcore\_sync\connection.py", line 101, in handle_request
+    raise exc
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpcore\_sync\connection.py", line 78, in handle_request
+    stream = self._connect(request)
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpcore\_sync\connection.py", line 156, in _connect
+    stream = stream.start_tls(**kwargs)
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpcore\_backends\sync.py", line 154, in start_tls
+    with map_exceptions(exc_map):
+         ~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpcore\_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [WinError 10054] An existing connection was forcibly closed by the remote host
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\anthropic\_base_client.py", line 1076, in request
+    response = self._client.send(
+        request,
+        stream=stream or self._should_stream_response_body(request=request),
+        **kwargs,
+    )
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpx\_client.py", line 914, in send
+    response = self._send_handling_auth(
+        request,
+    ...<2 lines>...
+        history=[],
+    )
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpx\_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+        request,
+        follow_redirects=follow_redirects,
+        history=history,
+    )
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpx\_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpx\_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpx\_transports\default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [WinError 10054] An existing connection was forcibly closed by the remote host
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "\\ADMIN\SHARE\Houston\MarketRisk\Personal Directories\Nate\Kiro_Projects\db-schema-tool-main_v3\crawler\stage2.py", line 324, in run_stage2
+    response = _call_with_retry(
+        client=client,
+    ...<6 lines>...
+        table_names=table_names,
+    )
+  File "\\ADMIN\SHARE\Houston\MarketRisk\Personal Directories\Nate\Kiro_Projects\db-schema-tool-main_v3\crawler\stage2.py", line 156, in _call_with_retry
+    raise last_exc
+  File "\\ADMIN\SHARE\Houston\MarketRisk\Personal Directories\Nate\Kiro_Projects\db-schema-tool-main_v3\crawler\stage2.py", line 107, in _call_with_retry
+    response = client.messages.create(
+        model=model,
+    ...<2 lines>...
+        messages=[{"role": "user", "content": prompt}],
+    )
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\anthropic\_utils\_utils.py", line 283, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\anthropic\resources\messages\messages.py", line 1000, in create
+    return self._post(
+           ~~~~~~~~~~^
+        "/v1/messages",
+        ^^^^^^^^^^^^^^^
+    ...<30 lines>...
+        stream_cls=Stream[RawMessageStreamEvent],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\anthropic\_base_client.py", line 1368, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\513615\AppData\Local\anaconda3\Lib\site-packages\anthropic\_base_client.py", line 1108, in request
+    raise APIConnectionError(request=request) from err
+anthropic.APIConnectionError: Connection error.
+
+2026-04-14 15:55:51  INFO      Batch 2/15: starting — tables: [IRGNLoadShipmentPrgWH, IRGNLSRcnclInvAdjWORK, IRGNLSRcnclPCWORK, IRGNLSRcnclSCWORK, IRGNProgramDetailWORK, IRGNPurchCtrAmendFee, IRGNPurchCtrAmendLog, IRGNPurchCtrDeliveryVER, IRGNPurchCtrDeliveryWORK, IRGNPurchCtrInquiryTEMP, IRGNPurchCtrPriceVER, IRGNPurchCtrPriceWORK, IRGNPurchCtrVER, IRGNPurchCtrWORK, IRGNSalesCtrAmendFee, IRGNSalesCtrAmendLog, IRGNSalesCtrDeliveryVER, IRGNSalesCtrDeliveryWORK, IRGNSalesCtrDelSubPrVER, IRGNSalesCtrDelSubs]
+2026-04-14 15:55:51  INFO      Batch 2/15: API call attempt 1 — tables: [IRGNLoadShipmentPrgWH, IRGNLSRcnclInvAdjWORK, IRGNLSRcnclPCWORK, IRGNLSRcnclSCWORK, IRGNProgramDetailWORK, IRGNPurchCtrAmendFee, IRGNPurchCtrAmendLog, IRGNPurchCtrDeliveryVER, IRGNPurchCtrDeliveryWORK, IRGNPurchCtrInquiryTEMP, IRGNPurchCtrPriceVER, IRGNPurchCtrPriceWORK, IRGNPurchCtrVER, IRGNPurchCtrWORK, IRGNSalesCtrAmendFee, IRGNSalesCtrAmendLog, IRGNSalesCtrDeliveryVER, IRGNSalesCtrDeliveryWORK, IRGNSalesCtrDelSubPrVER, IRGNSalesCtrDelSubs]
+2026-04-14 15:55:52  WARNING   Batch 2/15: Transient error on attempt 1 — CONNECTION_ERROR: Connection error.
+2026-04-14 15:55:52  WARNING   Batch 2/15: Retry 1/5 in 10s (previous: CONNECTION_ERROR)
+2026-04-14 15:56:03  INFO      Batch 2/15: API call attempt 2 — tables: [IRGNLoadShipmentPrgWH, IRGNLSRcnclInvAdjWORK, IRGNLSRcnclPCWORK, IRGNLSRcnclSCWORK, IRGNProgramDetailWORK, IRGNPurchCtrAmendFee, IRGNPurchCtrAmendLog, IRGNPurchCtrDeliveryVER, IRGNPurchCtrDeliveryWORK, IRGNPurchCtrInquiryTEMP, IRGNPurchCtrPriceVER, IRGNPurchCtrPriceWORK, IRGNPurchCtrVER, IRGNPurchCtrWORK, IRGNSalesCtrAmendFee, IRGNSalesCtrAmendLog, IRGNSalesCtrDeliveryVER, IRGNSalesCtrDeliveryWORK, IRGNSalesCtrDelSubPrVER, IRGNSalesCtrDelSubs]
+2026-04-14 15:56:04  WARNING   Batch 2/15: Transient error on attempt 2 — CONNECTION_ERROR: Connection error.
+2026-04-14 15:56:04  WARNING   Batch 2/15: Retry 2/5 in 20s (previous: CONNECTION_ERROR)
+2026-04-14 15:56:24  INFO      Batch 2/15: API call attempt 3 — tables: [IRGNLoadShipmentPrgWH, IRGNLSRcnclInvAdjWORK, IRGNLSRcnclPCWORK, IRGNLSRcnclSCWORK, IRGNProgramDetailWORK, IRGNPurchCtrAmendFee, IRGNPurchCtrAmendLog, IRGNPurchCtrDeliveryVER, IRGNPurchCtrDeliveryWORK, IRGNPurchCtrInquiryTEMP, IRGNPurchCtrPriceVER, IRGNPurchCtrPriceWORK, IRGNPurchCtrVER, IRGNPurchCtrWORK, IRGNSalesCtrAmendFee, IRGNSalesCtrAmendLog, IRGNSalesCtrDeliveryVER, IRGNSalesCtrDeliveryWORK, IRGNSalesCtrDelSubPrVER, IRGNSalesCtrDelSubs]
+2026-04-14 15:56:26  WARNING   Batch 2/15: Transient error on attempt 3 — CONNECTION_ERROR: Connection error.
+2026-04-14 15:56:26  WARNING   Batch 2/15: Retry 3/5 in 40s (previous: CONNECTION_ERROR)
+2026-04-14 15:57:06  INFO      Batch 2/15: API call attempt 4 — tables: [IRGNLoadShipmentPrgWH, IRGNLSRcnclInvAdjWORK, IRGNLSRcnclPCWORK, IRGNLSRcnclSCWORK, IRGNProgramDetailWORK, IRGNPurchCtrAmendFee, IRGNPurchCtrAmendLog, IRGNPurchCtrDeliveryVER, IRGNPurchCtrDeliveryWORK, IRGNPurchCtrInquiryTEMP, IRGNPurchCtrPriceVER, IRGNPurchCtrPriceWORK, IRGNPurchCtrVER, IRGNPurchCtrWORK, IRGNSalesCtrAmendFee, IRGNSalesCtrAmendLog, IRGNSalesCtrDeliveryVER, IRGNSalesCtrDeliveryWORK, IRGNSalesCtrDelSubPrVER, IRGNSalesCtrDelSubs]
+2026-04-14 15:57:08  WARNING   Batch 2/15: Transient error on attempt 4 — CONNECTION_ERROR: Connection error.
+2026-04-14 15:57:08  WARNING   Batch 2/15: Retry 4/5 in 80s (previous: CONNECTION_ERROR)
