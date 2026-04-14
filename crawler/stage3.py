@@ -13,6 +13,7 @@ Key improvements over v1:
 from __future__ import annotations
 
 import json
+import time
 
 from .connection import QueryExecutor
 from .constants import get_stage3_system_prompt
@@ -24,6 +25,51 @@ except ImportError:
     pass
 
 SAMPLE_ROWS = 10
+_MAX_RETRIES = 3          # per-table API call retries
+_RETRY_BASE_DELAY = 5     # seconds — doubles each attempt
+
+
+def _call_with_retry(client, model: str, system_prompt: str, prompt: str,
+                     max_tokens: int = 4096, table_name: str = "") -> object:
+    """Call the Anthropic API with exponential backoff on transient errors.
+
+    Retries on connection errors, timeouts, and 5xx server errors.
+    Raises immediately on 4xx client errors (bad key, invalid request, etc.).
+    """
+    delay = _RETRY_BASE_DELAY
+    last_exc: Exception | None = None
+
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            return client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system_prompt,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except Exception as e:
+            exc_str = str(e)
+            exc_type = type(e).__name__
+
+            # Identify non-retryable client errors (4xx)
+            is_client_error = any(code in exc_str for code in
+                                  ["status_code=400", "status_code=401",
+                                   "status_code=403", "status_code=404"])
+            if is_client_error:
+                raise
+
+            last_exc = e
+            if attempt < _MAX_RETRIES:
+                print(f"    WARNING: API call failed for '{table_name}' "
+                      f"(attempt {attempt + 1}/{_MAX_RETRIES + 1}): "
+                      f"{exc_type}: {exc_str[:120]}")
+                print(f"    Retrying in {delay}s...")
+                time.sleep(delay)
+                delay = min(delay * 2, 60)  # cap at 60s
+            else:
+                print(f"    ERROR: All {_MAX_RETRIES + 1} attempts failed for '{table_name}': "
+                      f"{exc_type}: {exc_str[:200]}")
+                raise
 
 
 def run_stage3(
@@ -90,14 +136,17 @@ def run_stage3(
         system_prompt = get_stage3_system_prompt(industry, memory_context=table_mem)
 
         try:
-            response = client.messages.create(
+            response = _call_with_retry(
+                client=client,
                 model=model,
+                system_prompt=system_prompt,
+                prompt=prompt,
                 max_tokens=4096,
-                system=system_prompt,
-                messages=[{"role": "user", "content": prompt}],
+                table_name=table.name,
             )
         except Exception as e:
-            print(f"    ERROR: Sonnet API call failed: {e}")
+            print(f"    ERROR: Sonnet API call failed after {_MAX_RETRIES + 1} attempts "
+                  f"for '{table.name}': {type(e).__name__}: {e}")
             continue
 
         tokens = response.usage.input_tokens + response.usage.output_tokens

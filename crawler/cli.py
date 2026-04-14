@@ -93,6 +93,11 @@ def main():
         help="Skip column statistics in Stage 2 (faster but lower scoring quality)",
     )
     crawl_group.add_argument(
+        "--skip-stage1", nargs="?", const="stage1.json", default=None, metavar="FILE",
+        help="Skip Stage 1 and load candidates from FILE (default: stage1.json). "
+             "If FILE does not exist, Stage 1 runs normally.",
+    )
+    crawl_group.add_argument(
         "--industry",
         choices=["biofuel", "manufacturing", "food_processing", "chemicals", "general"],
         default=os.getenv("INDUSTRY", "general"),
@@ -173,7 +178,27 @@ def main():
     print("  STAGE 1: Heuristic Filter")
     print("-" * 40)
 
-    candidates, stage1_summary = run_stage1(executor, min_rows=args.min_rows)
+    stage1_loaded_from_file = False
+    candidates, stage1_summary = [], {}
+
+    if args.skip_stage1:
+        stage1_file = args.skip_stage1
+        if os.path.exists(stage1_file):
+            print(f"  Loading Stage 1 results from '{stage1_file}' (--skip-stage1)...")
+            try:
+                candidates, stage1_summary = _load_stage1_from_file(stage1_file)
+                stage1_loaded_from_file = True
+                print(f"  Loaded {len(candidates)} candidates from cache "
+                      f"(skipping DB enumeration)")
+            except Exception as e:
+                print(f"  WARNING: Could not load '{stage1_file}': {e}")
+                print("  Falling back to running Stage 1 from scratch...")
+        else:
+            print(f"  WARNING: --skip-stage1 specified but '{stage1_file}' not found. "
+                  "Running Stage 1 from scratch.")
+
+    if not stage1_loaded_from_file:
+        candidates, stage1_summary = run_stage1(executor, min_rows=args.min_rows)
 
     if args.stage == 1 or not candidates:
         if not candidates:
@@ -322,6 +347,51 @@ def main():
     )
 
 
+def _load_stage1_from_file(path: str):
+    """Load Stage 1 candidates from a previously saved JSON output file.
+
+    Returns (candidates, summary) matching the shape returned by run_stage1().
+    Preserves full FK data if the file was written by a recent version of this tool
+    (which saves foreign_keys, not just foreign_key_count).
+    """
+    from .types import CandidateTable, ColumnInfo
+
+    with open(path, "r") as f:
+        data = json.load(f)
+
+    stage1_out = data.get("crawl_summary", {}).get("stage1_output", {})
+    summary = stage1_out.get("summary", {})
+    candidate_dicts = stage1_out.get("candidates", [])
+
+    candidates = []
+    for c in candidate_dicts:
+        columns = [
+            ColumnInfo(
+                name=col["name"],
+                data_type=col["data_type"],
+                is_nullable=col.get("is_nullable", True),
+            )
+            for col in c.get("columns", [])
+        ]
+        candidates.append(
+            CandidateTable(
+                name=c["name"],
+                row_count=c["row_count"],
+                columns=columns,
+                has_date_columns=bool(c.get("date_columns")),
+                date_columns=c.get("date_columns", []),
+                sample_values=c.get("sample_values", []),
+                heuristic_score=c.get("heuristic_score", 0),
+                primary_keys=c.get("primary_keys", []),
+                # 'foreign_keys' is saved by newer versions; older files only have
+                # 'foreign_key_count' — in that case we get no FK detail (acceptable).
+                foreign_keys=c.get("foreign_keys", []),
+            )
+        )
+
+    return candidates, summary
+
+
 def _finish(
     executor: QueryExecutor,
     start_time: float,
@@ -356,6 +426,7 @@ def _finish(
                     "heuristic_score": c.heuristic_score,
                     "primary_keys": c.primary_keys,
                     "foreign_key_count": len(c.foreign_keys),
+                    "foreign_keys": c.foreign_keys,
                     "columns": [
                         {"name": col.name, "data_type": col.data_type}
                         for col in c.columns

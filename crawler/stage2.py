@@ -52,10 +52,12 @@ def run_stage2(
 
     # ── Pre-fetch column stats for all candidates ─────────────────────────────
     # This adds significant context to the scoring prompt.
-    # Skipped if --skip-column-stats or too many candidates (performance guard).
+    # Skipped if --skip-column-stats or candidate count exceeds the performance guard.
+    # NOTE: This guard only skips per-column DB stats. AI batch scoring always runs.
+    STATS_CANDIDATE_LIMIT = 500  # Raised from 100 — Haiku is cheap, stats are the slow part
     should_gather_stats = (
         not skip_column_stats
-        and len(candidates) <= 100  # Don't run stats on huge candidate lists
+        and len(candidates) <= STATS_CANDIDATE_LIMIT
     )
 
     if should_gather_stats:
@@ -70,8 +72,13 @@ def run_stage2(
                 print(f"    WARNING: Stats failed for {candidate.name}: {e}")
                 candidate.column_stats = {}
     else:
-        reason = "too many candidates" if len(candidates) > 100 else "skipped by flag"
-        print(f"\n  Stage 2: Column stats skipped ({reason})")
+        if skip_column_stats:
+            reason = "skipped by --skip-column-stats flag"
+        else:
+            reason = (f"{len(candidates)} candidates exceeds limit of {STATS_CANDIDATE_LIMIT} "
+                      f"— use --skip-column-stats to suppress this message")
+        print(f"\n  Stage 2: Per-column DB stats skipped ({reason})")
+        print("  Stage 2: AI batch scoring will proceed without per-column stats.")
 
     # ── Score in batches ──────────────────────────────────────────────────────
     system_prompt = get_stage2_system_prompt(industry, memory_context=memory_context)
