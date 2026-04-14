@@ -11,10 +11,17 @@ Key improvements over v1:
 - Richer prompt: PK, FK, and column stats included
 - Per-table error isolation — one bad AI response doesn't fail the batch
 - Configurable min_score threshold
+- Checkpoint/resume: saves progress after each batch so a mid-run failure
+  doesn't throw away completed work
+- Exponential backoff with 5 retries (10/20/40/80/120s) for transient errors
+- Detailed error logging with full stack traces and error classification
 """
 from __future__ import annotations
 
 import json
+import logging
+import time
+import traceback
 
 from .connection import QueryExecutor
 from .constants import get_stage2_system_prompt
@@ -22,6 +29,206 @@ from .types import CandidateTable, ScoredTable, ColumnInfo
 
 BATCH_SIZE = 20  # Reduced from 25 — richer prompts are larger
 
+# Retry schedule: 5 retries with exponential backoff
+_RETRY_DELAYS = [10, 20, 40, 80, 120]  # seconds between attempts
+
+log = logging.getLogger("dbscan")
+
+
+# ── Error classification ───────────────────────────────────────────────────────
+
+def _classify_error(exc: Exception) -> str:
+    """Classify an API exception into a human-readable category."""
+    exc_str = str(exc)
+    exc_type = type(exc).__name__
+
+    if "429" in exc_str:
+        return "RATE_LIMIT (429 Too Many Requests)"
+    if "529" in exc_str:
+        return "OVERLOADED (529 API Overloaded)"
+    if any(c in exc_str for c in ["500", "502", "503", "504"]):
+        return f"SERVER_ERROR (5xx)"
+    if any(c in exc_str for c in ["401", "403"]):
+        return "AUTH_ERROR (401/403)"
+    if "400" in exc_str:
+        return "BAD_REQUEST (400)"
+    if any(k in exc_str.lower() for k in ["timeout", "timed out"]):
+        return "TIMEOUT"
+    if any(k in exc_str.lower() for k in ["connection", "refused", "remotedisconnected",
+                                            "connectionreset", "brokenpipe"]):
+        return "CONNECTION_ERROR"
+    if "ssl" in exc_str.lower():
+        return "SSL_ERROR"
+    return f"UNKNOWN ({exc_type})"
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Return True if the error is transient and worth retrying."""
+    exc_str = str(exc)
+    # Don't retry client errors
+    if any(code in exc_str for code in ["status_code=400", "status_code=401",
+                                         "status_code=403", "status_code=404"]):
+        return False
+    return True
+
+
+# ── Retry wrapper ──────────────────────────────────────────────────────────────
+
+def _call_with_retry(
+    client, model: str, system_prompt: str, prompt: str,
+    max_tokens: int = 4096,
+    batch_num: int = 0, total_batches: int = 0,
+    table_names: list[str] | None = None,
+) -> object:
+    """Call the Anthropic API with exponential backoff on transient errors.
+
+    Retries up to len(_RETRY_DELAYS) times with increasing delays.
+    Raises immediately on non-retryable 4xx client errors.
+    """
+    last_exc: Exception | None = None
+    batch_label = f"Batch {batch_num}/{total_batches}"
+    tables_str = ", ".join(table_names or [])
+
+    for attempt, delay in enumerate([0] + _RETRY_DELAYS):
+        if attempt > 0:
+            log.warning(
+                "%s: Retry %d/%d in %ds (previous: %s)",
+                batch_label, attempt, len(_RETRY_DELAYS), delay,
+                _classify_error(last_exc),
+            )
+            print(f"    Retrying in {delay}s... (attempt {attempt + 1}/{len(_RETRY_DELAYS) + 1})")
+            time.sleep(delay)
+
+        try:
+            log.info(
+                "%s: API call attempt %d — tables: [%s]",
+                batch_label, attempt + 1, tables_str,
+            )
+            response = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system_prompt,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            log.info(
+                "%s: API call succeeded (attempt %d)",
+                batch_label, attempt + 1,
+            )
+            return response
+
+        except Exception as e:
+            last_exc = e
+            error_class = _classify_error(e)
+
+            if not _is_retryable(e):
+                log.error(
+                    "%s: Non-retryable error — %s\n"
+                    "  Tables: [%s]\n"
+                    "  Exception: %s: %s\n"
+                    "  Traceback:\n%s",
+                    batch_label, error_class,
+                    tables_str,
+                    type(e).__name__, e,
+                    traceback.format_exc(),
+                )
+                raise
+
+            if attempt < len(_RETRY_DELAYS):
+                log.warning(
+                    "%s: Transient error on attempt %d — %s: %s",
+                    batch_label, attempt + 1, error_class, str(e)[:200],
+                )
+            # else: all retries exhausted — fall through to raise below
+
+    # All attempts failed
+    log.error(
+        "%s: All %d attempts failed.\n"
+        "  Last error class: %s\n"
+        "  Tables: [%s]\n"
+        "  Exception: %s: %s\n"
+        "  Full traceback:\n%s",
+        batch_label, len(_RETRY_DELAYS) + 1,
+        _classify_error(last_exc),
+        tables_str,
+        type(last_exc).__name__, last_exc,
+        traceback.format_exc(),
+    )
+    raise last_exc
+
+
+# ── Checkpoint helpers ─────────────────────────────────────────────────────────
+
+def _scored_table_to_dict(t: ScoredTable) -> dict:
+    return {
+        "name": t.name,
+        "score": t.score,
+        "reason": t.reason,
+        "likely_concept": t.likely_concept,
+        "key_columns": t.key_columns,
+        "row_count": t.row_count,
+        "columns": [{"name": c.name, "data_type": c.data_type, "is_nullable": c.is_nullable}
+                    for c in t.columns],
+        "primary_keys": t.primary_keys,
+        "foreign_keys": t.foreign_keys,
+    }
+
+
+def _scored_table_from_dict(d: dict) -> ScoredTable:
+    return ScoredTable(
+        name=d["name"],
+        score=d["score"],
+        reason=d["reason"],
+        likely_concept=d["likely_concept"],
+        key_columns=d.get("key_columns", []),
+        row_count=d.get("row_count", 0),
+        columns=[
+            ColumnInfo(name=c["name"], data_type=c["data_type"],
+                       is_nullable=c.get("is_nullable", True))
+            for c in d.get("columns", [])
+        ],
+        primary_keys=d.get("primary_keys", []),
+        foreign_keys=d.get("foreign_keys", []),
+    )
+
+
+def _load_checkpoint(path: str) -> dict[int, list[ScoredTable]]:
+    """Load a stage2 checkpoint file. Returns {batch_index: [ScoredTable]}."""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        result: dict[int, list[ScoredTable]] = {}
+        for k, tables in data.get("completed_batches", {}).items():
+            result[int(k)] = [_scored_table_from_dict(t) for t in tables]
+        log.info("Checkpoint loaded from '%s': %d batches already done", path, len(result))
+        print(f"  Checkpoint loaded: {len(result)} batch(es) already completed — skipping those.")
+        return result
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        log.warning("Could not load checkpoint '%s': %s — starting fresh", path, e)
+        print(f"  WARNING: Could not read checkpoint '{path}': {e} — starting fresh.")
+        return {}
+
+
+def _save_checkpoint(path: str, completed: dict[int, list[ScoredTable]]) -> None:
+    """Save checkpoint to disk after each batch completes."""
+    try:
+        data = {
+            "version": "1",
+            "completed_batches": {
+                str(k): [_scored_table_to_dict(t) for t in tables]
+                for k, tables in completed.items()
+            },
+        }
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2, default=str)
+        log.debug("Checkpoint saved to '%s' (%d batches)", path, len(completed))
+    except Exception as e:
+        log.warning("Could not save checkpoint '%s': %s", path, e)
+        print(f"  WARNING: Could not save checkpoint: {e}")
+
+
+# ── Public entry point ─────────────────────────────────────────────────────────
 
 def run_stage2(
     candidates: list[CandidateTable],
@@ -32,6 +239,8 @@ def run_stage2(
     skip_column_stats: bool = False,
     industry: str = "biofuel",
     memory_context: str = "",
+    batch_delay: float = 1.0,
+    checkpoint_file: str = "stage2_checkpoint.json",
 ) -> tuple[list[ScoredTable], int]:
     """Score candidate tables using Claude Haiku.
 
@@ -43,6 +252,8 @@ def run_stage2(
         min_score:          Only return tables with score >= min_score (default 7)
         skip_column_stats:  Skip column stats (faster, lower token count)
         industry:           Industry context for the scoring prompt
+        batch_delay:        Seconds to sleep between API calls (default 1.0)
+        checkpoint_file:    Path to save/load progress checkpoint (default stage2_checkpoint.json)
 
     Returns:
         (scored_tables, total_tokens) — only tables scoring >= min_score
@@ -51,10 +262,7 @@ def run_stage2(
     all_scored: list[ScoredTable] = []
 
     # ── Pre-fetch column stats for all candidates ─────────────────────────────
-    # This adds significant context to the scoring prompt.
-    # Skipped if --skip-column-stats or candidate count exceeds the performance guard.
-    # NOTE: This guard only skips per-column DB stats. AI batch scoring always runs.
-    STATS_CANDIDATE_LIMIT = 500  # Raised from 100 — Haiku is cheap, stats are the slow part
+    STATS_CANDIDATE_LIMIT = 500
     should_gather_stats = (
         not skip_column_stats
         and len(candidates) <= STATS_CANDIDATE_LIMIT
@@ -80,34 +288,89 @@ def run_stage2(
         print(f"\n  Stage 2: Per-column DB stats skipped ({reason})")
         print("  Stage 2: AI batch scoring will proceed without per-column stats.")
 
+    # ── Load checkpoint (resume from previous run if available) ──────────────
+    completed_batches: dict[int, list[ScoredTable]] = _load_checkpoint(checkpoint_file)
+
+    # Populate all_scored from checkpoint so resumed runs get full results
+    for batch_scored in completed_batches.values():
+        all_scored.extend(batch_scored)
+
     # ── Score in batches ──────────────────────────────────────────────────────
     system_prompt = get_stage2_system_prompt(industry, memory_context=memory_context)
+    total_batches = (len(candidates) + BATCH_SIZE - 1) // BATCH_SIZE
 
     for i in range(0, len(candidates), BATCH_SIZE):
         batch = candidates[i : i + BATCH_SIZE]
-        batch_num = (i // BATCH_SIZE) + 1
-        total_batches = (len(candidates) + BATCH_SIZE - 1) // BATCH_SIZE
+        batch_idx = i // BATCH_SIZE
+        batch_num = batch_idx + 1
+        table_names = [t.name for t in batch]
+
+        # Resume: skip batches already in checkpoint
+        if batch_idx in completed_batches:
+            print(f"\n  Batch {batch_num}/{total_batches}: SKIPPED (checkpoint) — "
+                  f"{len(completed_batches[batch_idx])} tables already scored")
+            log.info("Batch %d/%d: skipped via checkpoint", batch_num, total_batches)
+            continue
+
         print(f"\n  Batch {batch_num}/{total_batches}: scoring {len(batch)} tables...")
+        log.info(
+            "Batch %d/%d: starting — tables: [%s]",
+            batch_num, total_batches, ", ".join(table_names),
+        )
 
         prompt = _build_batch_prompt(batch)
 
         try:
-            response = client.messages.create(
+            response = _call_with_retry(
+                client=client,
                 model=model,
+                system_prompt=system_prompt,
+                prompt=prompt,
                 max_tokens=4096,
-                system=system_prompt,
-                messages=[{"role": "user", "content": prompt}],
+                batch_num=batch_num,
+                total_batches=total_batches,
+                table_names=table_names,
             )
         except Exception as e:
-            print(f"  ERROR: Haiku API call failed for batch {batch_num}: {e}")
+            error_class = _classify_error(e)
+            print(f"  ERROR: Batch {batch_num}/{total_batches} failed ({error_class}) — "
+                  f"tables: {', '.join(table_names)}")
+            print(f"  {type(e).__name__}: {str(e)[:200]}")
+            print(f"  (See log file for full stack trace)")
+            log.error(
+                "Batch %d/%d FAILED — %s\n"
+                "  Tables: [%s]\n"
+                "  Exception: %s: %s\n"
+                "  Traceback:\n%s",
+                batch_num, total_batches, error_class,
+                ", ".join(table_names),
+                type(e).__name__, e,
+                traceback.format_exc(),
+            )
+            # Delay before next batch even after failure
+            if batch_delay > 0 and i + BATCH_SIZE < len(candidates):
+                time.sleep(batch_delay)
             continue
 
         tokens = response.usage.input_tokens + response.usage.output_tokens
         total_tokens += tokens
+        log.info(
+            "Batch %d/%d: success — %d tokens used",
+            batch_num, total_batches, tokens,
+        )
 
         raw_text = response.content[0].text.strip()
         scored = _parse_scores(raw_text, batch)
         all_scored.extend(scored)
+
+        # Save checkpoint after each successful batch
+        completed_batches[batch_idx] = scored
+        _save_checkpoint(checkpoint_file, completed_batches)
+
+        # Delay between batches to avoid rate limiting
+        if batch_delay > 0 and i + BATCH_SIZE < len(candidates):
+            log.debug("Sleeping %.1fs between batches", batch_delay)
+            time.sleep(batch_delay)
 
     # ── Filter by min_score ───────────────────────────────────────────────────
     high_value = [t for t in all_scored if t.score >= min_score]
@@ -187,6 +450,7 @@ def _parse_scores(raw_text: str, batch: list[CandidateTable]) -> list[ScoredTabl
     except json.JSONDecodeError:
         print(f"  WARNING: Failed to parse Haiku response as JSON")
         print(f"  Raw (first 300 chars): {raw_text[:300]}")
+        log.warning("JSON parse failure — raw response (first 500 chars):\n%s", raw_text[:500])
         return []
 
     # Build lookup for candidate metadata
@@ -220,6 +484,7 @@ def _parse_scores(raw_text: str, batch: list[CandidateTable]) -> list[ScoredTabl
             )
         except Exception as e:
             print(f"  WARNING: Skipping {table_name} due to parse error: {e}")
+            log.warning("Parse error for table '%s': %s", table_name, e)
             continue
 
     return scored

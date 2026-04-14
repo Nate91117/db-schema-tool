@@ -20,6 +20,7 @@ Usage examples:
 
 import argparse
 import json
+import logging
 import os
 import sys
 import time
@@ -35,6 +36,45 @@ from .stage1 import run_stage1
 from .stage2 import run_stage2
 from .stage3 import run_stage3
 from .memory import fetch_memory_context, format_memory_for_stage2
+
+
+def _setup_logging(log_file: str = "dbscan.log") -> logging.Logger:
+    """Configure the 'dbscan' logger to write to both a file and the console.
+
+    - File handler: DEBUG level — captures every API call, retry, and error
+      with full stack traces.
+    - Console handler: WARNING level — only surfaces errors/warnings so the
+      existing print()-based progress output is not duplicated on screen.
+    """
+    logger = logging.getLogger("dbscan")
+    logger.setLevel(logging.DEBUG)
+
+    if logger.handlers:
+        # Already configured (e.g., called twice in tests)
+        return logger
+
+    fmt = logging.Formatter(
+        "%(asctime)s  %(levelname)-8s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # File handler — verbose, captures everything
+    try:
+        fh = logging.FileHandler(log_file, encoding="utf-8")
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(fmt)
+        logger.addHandler(fh)
+    except OSError as e:
+        print(f"WARNING: Could not open log file '{log_file}': {e}")
+
+    # Console handler — only warnings/errors (don't duplicate print() output)
+    ch = logging.StreamHandler(sys.stderr)
+    ch.setLevel(logging.WARNING)
+    ch.setFormatter(fmt)
+    logger.addHandler(ch)
+
+    logger.info("Logging initialised — file: %s", log_file)
+    return logger
 
 
 def main():
@@ -103,6 +143,20 @@ def main():
         default=os.getenv("INDUSTRY", "general"),
         help="Industry context for AI prompts (default: general)",
     )
+    crawl_group.add_argument(
+        "--batch-delay", type=float, default=1.0, metavar="SECONDS",
+        help="Seconds to sleep between API calls in Stage 2 and Stage 3 (default: 1.0). "
+             "Increase if hitting rate limits or connection errors on corporate networks.",
+    )
+    crawl_group.add_argument(
+        "--checkpoint-file", default="stage2_checkpoint.json", metavar="FILE",
+        help="Stage 2 checkpoint file for resume capability (default: stage2_checkpoint.json). "
+             "If this file exists from a previous failed run, scored batches are skipped.",
+    )
+    crawl_group.add_argument(
+        "--log-file", default="dbscan.log", metavar="FILE",
+        help="Log file path for detailed error traces (default: dbscan.log).",
+    )
 
     # ── AI models ─────────────────────────────────────────────────────────────
     model_group = parser.add_argument_group("AI Models")
@@ -122,9 +176,18 @@ def main():
 
     args = parser.parse_args()
 
+    # Set up logging before anything else so all errors are captured
+    _setup_logging(args.log_file)
+    log = logging.getLogger("dbscan")
+    log.info(
+        "Run started — industry=%s batch_delay=%.1fs checkpoint=%s log=%s",
+        args.industry, args.batch_delay, args.checkpoint_file, args.log_file,
+    )
+
     print("=" * 60)
     print("  Database Schema Discovery Tool")
     print(f"  Industry: {args.industry}")
+    print(f"  Log file: {args.log_file}")
     print("=" * 60)
 
     # ── Connect to database ───────────────────────────────────────────────────
@@ -265,6 +328,8 @@ def main():
             skip_column_stats=args.skip_column_stats,
             industry=args.industry,
             memory_context=memory_str,
+            batch_delay=args.batch_delay,
+            checkpoint_file=args.checkpoint_file,
         )
         total_tokens += stage2_tokens
 
@@ -318,6 +383,7 @@ def main():
             max_tables=args.max_stage3_tables,
             industry=args.industry,
             memory_context=memory_ctx if memory_ctx else "",
+            batch_delay=args.batch_delay,
         )
         total_tokens += stage3_tokens
 
