@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 *.db
 results*.json
+stage2_new.json
+test_results.json
+*.log
+*_checkpoint.json
+db_schema_tool.egg-info/

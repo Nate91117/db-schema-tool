@@ -1,14 +1,11 @@
 [project]
 name = "db-schema-tool"
-version = "0.2.0"
+version = "0.3.0"
 description = "Database schema discovery tool — AI-assisted semantic layer builder"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "anthropic>=0.40.0",
-    "pymssql>=2.2.0",
-    "pyodbc>=4.0.0",
     "python-dotenv>=1.0.0",
-    "supermemory>=0.1.0",
 ]
 
 [project.scripts]
@@ -19,6 +16,26 @@ dbscan-report = "crawler.report:main"
 include = ["crawler*"]
 
 [project.optional-dependencies]
+mssql = [
+    "pymssql>=2.2.0",
+    "pyodbc>=4.0.0",
+]
+google = [
+    "google-generativeai>=0.8.0",
+]
+openai = [
+    "openai>=1.0.0",
+]
+memory = [
+    "supermemory>=0.1.0",
+]
+all = [
+    "pymssql>=2.2.0",
+    "pyodbc>=4.0.0",
+    "google-generativeai>=0.8.0",
+    "openai>=1.0.0",
+    "supermemory>=0.1.0",
+]
 dev = [
     "pytest>=7.0.0",
     "black>=24.0.0",
