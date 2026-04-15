@@ -437,13 +437,15 @@ def _parse_scores(raw_text: str, batch: list[CandidateTable]) -> list[ScoredTabl
 
     Per-table error isolation: a bad value for one table doesn't kill the batch.
     """
-    # Strip markdown code fences
-    text = raw_text
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
+    # Extract outermost JSON object — robust against any markdown fence format
+    start = raw_text.find("{")
+    end = raw_text.rfind("}")
+    if start == -1 or end == -1:
+        print(f"  WARNING: Failed to parse Haiku response as JSON")
+        print(f"  Raw (first 300 chars): {raw_text[:300]}")
+        log.warning("JSON parse failure — raw response (first 500 chars):\n%s", raw_text[:500])
+        return []
+    text = raw_text[start : end + 1]
 
     try:
         scores: dict = json.loads(text)

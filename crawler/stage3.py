@@ -351,12 +351,16 @@ def _build_inspection_prompt(table: ScoredTable, sample_rows: list[dict]) -> str
 
 def _parse_annotation(raw_text: str, table: ScoredTable) -> SemanticTable | None:
     """Parse Sonnet's JSON response into a SemanticTable."""
-    text = raw_text
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
+    # Extract outermost JSON object — robust against any markdown fence format
+    start = raw_text.find("{")
+    end = raw_text.rfind("}")
+    if start == -1 or end == -1:
+        log.warning(
+            "JSON parse failure for '%s' — raw response (first 500 chars):\n%s",
+            table.name, raw_text[:500],
+        )
+        return None
+    text = raw_text[start : end + 1]
 
     try:
         data = json.loads(text)
