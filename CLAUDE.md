@@ -6,5 +6,4 @@ ERP database crawler for Dynamics AX — de-branded from danzig-crawler for work
 
 ## Tasks
 <!-- daily-helper:sync-start -->
-- [ ] <task id=b7201206-f13c-4047-8ccd-6b47913ac08c> Compare Runs v1 and v2 - adjust as needed
 <!-- daily-helper:sync-end -->
