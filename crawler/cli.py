@@ -4,6 +4,7 @@ Subcommands:
   crawl     Stage 1 only. Requires DB connection. Outputs stage1.json.
   score     Stage 2 only. No DB needed. Reads stage1.json, outputs stage2.json.
   annotate  Stage 3 only. No DB needed. Reads stage2.json, outputs results.json.
+  report    Generate a styled HTML report from a stage 3 results.json.
   full      All 3 stages in sequence (legacy behaviour). Requires DB + AI key.
 
 Examples:
@@ -47,6 +48,7 @@ except ImportError:
         pass
 
 from .ai_client import AIClient, DEFAULT_MODELS, SUPPORTED_PROVIDERS, get_default_model
+from .report_html import generate_report
 from .stage1 import run_stage1
 from .stage2 import run_stage2
 from .stage3 import run_stage3
@@ -185,6 +187,7 @@ def _load_stage1_file(path: str) -> tuple[list[CandidateTable], dict]:
             heuristic_score=c.get("heuristic_score", 0),
             primary_keys=c.get("primary_keys", []),
             foreign_keys=c.get("foreign_keys", []),
+            contract_signature=c.get("contract_signature", {}),
         ))
 
     return candidates, summary
@@ -215,6 +218,7 @@ def _write_stage1_file(
                 ],
                 "date_columns": c.date_columns,
                 "sample_values": c.sample_values,
+                "contract_signature": c.contract_signature,
             }
             for c in candidates
         ],
@@ -251,6 +255,11 @@ def _load_stage2_file(path: str) -> list[ScoredTable]:
             columns=columns,
             primary_keys=t.get("primary_keys", []),
             foreign_keys=t.get("foreign_keys", []),
+            heuristic_score=t.get("heuristic_score", 0),
+            contract_signature=t.get("contract_signature", {}),
+            market_risk_score=t.get("market_risk_score", 0),
+            market_risk_rationale=t.get("market_risk_rationale", ""),
+            ai_scored=t.get("ai_scored", True),
         ))
     return tables
 
@@ -262,13 +271,28 @@ def _write_stage2_file(
     min_score: int,
     meta: dict | None = None,
 ) -> None:
-    """Write all scored tables to stage2.json (sorted by score desc)."""
-    all_sorted = sorted(all_scored, key=lambda t: t.score, reverse=True)
+    """Write all scored tables to stage2.json.
+
+    AI-scored tables come first (sorted by score desc); below-cap pass-through
+    tables follow (sorted by heuristic_score desc with ai_scored=False).
+    """
+    ai_scored = sorted(
+        [t for t in all_scored if t.ai_scored],
+        key=lambda t: t.score, reverse=True,
+    )
+    below_cap = sorted(
+        [t for t in all_scored if not t.ai_scored],
+        key=lambda t: t.heuristic_score, reverse=True,
+    )
+    all_sorted = ai_scored + below_cap
+
     output = {
-        "version": "1",
+        "version": "1.1",
         "meta": meta or {},
         "stats": {
             "scored_count": len(all_scored),
+            "ai_scored_count": len(ai_scored),
+            "below_cap_count": len(below_cap),
             "high_value_count": len(high_value),
             "min_score_threshold": min_score,
         },
@@ -287,6 +311,11 @@ def _write_stage2_file(
                     {"name": c.name, "data_type": c.data_type, "is_nullable": c.is_nullable}
                     for c in t.columns
                 ],
+                "heuristic_score": t.heuristic_score,
+                "contract_signature": t.contract_signature,
+                "market_risk_score": t.market_risk_score,
+                "market_risk_rationale": t.market_risk_rationale,
+                "ai_scored": t.ai_scored,
             }
             for t in all_sorted
         ],
@@ -421,20 +450,21 @@ def cmd_score(args) -> None:
     print("  STAGE 2: AI Batch Scoring")
     print("-" * 40)
 
+    cap = args.max_stage2_tables if args.max_stage2_tables and args.max_stage2_tables > 0 else None
+
     start = time.time()
-    high_value, tokens = run_stage2(
+    high_value, tokens, below_cap = run_stage2(
         candidates=candidates,
         ai_client=ai_client,
         min_score=args.min_score,
         industry=args.industry,
         batch_delay=args.batch_delay,
         checkpoint_file=args.checkpoint_file,
+        max_tables=cap,
     )
     duration_ms = int((time.time() - start) * 1000)
 
-    # Collect all_scored from checkpoint + current run
-    # run_stage2 returns only high_value; for the output file we reconstruct all_scored
-    # from the checkpoint file which holds every batch result regardless of score
+    # Collect all_scored from checkpoint (every AI-scored batch) + below-cap pass-through
     import json as _json
     all_scored_flat: list[ScoredTable] = []
     try:
@@ -444,13 +474,15 @@ def cmd_score(args) -> None:
         for batch_tables in cp.get("completed_batches", {}).values():
             all_scored_flat.extend(_scored_table_from_dict(t) for t in batch_tables)
     except Exception:
-        all_scored_flat = high_value  # fallback: at least write high-value tables
+        all_scored_flat = list(high_value)
+    all_scored_flat.extend(below_cap)
 
     meta = {
         "provider": args.provider,
         "model": model,
         "industry": args.industry,
         "min_score": args.min_score,
+        "max_stage2_tables": cap,
         "input_file": stage1_path,
         "tokens_used": tokens,
         "duration_ms": duration_ms,
@@ -465,11 +497,13 @@ def cmd_score(args) -> None:
         meta=meta,
     )
 
+    ai_scored_count = sum(1 for t in all_scored_flat if t.ai_scored)
     print(f"\n  Score complete: {len(high_value)} high-value tables "
-          f"(of {len(all_scored_flat)} scored) | {tokens:,} tokens | {duration_ms:,}ms")
+          f"(of {ai_scored_count} AI-scored, {len(below_cap)} below-cap pass-through) "
+          f"| {tokens:,} tokens | {duration_ms:,}ms")
     print(f"  Output: {args.output}")
     log.info("Score complete: %d/%d high-value, %d tokens, output=%s",
-             len(high_value), len(all_scored_flat), tokens, args.output)
+             len(high_value), ai_scored_count, tokens, args.output)
 
 
 # ── Subcommand: annotate ──────────────────────────────────────────────────────
@@ -495,10 +529,12 @@ def cmd_annotate(args) -> None:
         print(f"ERROR: Could not load '{stage2_path}': {e}")
         sys.exit(1)
 
-    # Filter by min-score
-    high_value = [t for t in all_tables if t.score >= args.min_score]
+    # Filter by min-score (ignore below-cap pass-through rows)
+    high_value = [t for t in all_tables if t.ai_scored and t.score >= args.min_score]
     high_value.sort(key=lambda t: t.score, reverse=True)
-    print(f"  Loaded {len(all_tables)} tables, {len(high_value)} above min-score {args.min_score}")
+    skipped_below_cap = sum(1 for t in all_tables if not t.ai_scored)
+    print(f"  Loaded {len(all_tables)} tables ({skipped_below_cap} below-cap skipped), "
+          f"{len(high_value)} above min-score {args.min_score}")
 
     if not high_value:
         print(f"\n  No tables with score >= {args.min_score}. "
@@ -575,6 +611,9 @@ def cmd_annotate(args) -> None:
                 "business_concept": t.business_concept,
                 "score": t.score,
                 "row_count": t.row_count,
+                "market_risk_score": t.market_risk_score,
+                "market_risk_rationale": t.market_risk_rationale,
+                "contract_signature": t.contract_signature,
                 "columns": t.columns,
                 "relationships": t.relationships,
             }
@@ -590,6 +629,22 @@ def cmd_annotate(args) -> None:
     print(f"  Output: {args.output}")
     log.info("Annotate complete: %d/%d annotated, %d tokens, output=%s",
              len(semantic_tables), len(high_value), tokens, args.output)
+
+
+# ── Subcommand: report ────────────────────────────────────────────────────────
+
+def cmd_report(args) -> None:
+    """Generate a styled HTML report from a stage 3 results.json file."""
+    if not os.path.exists(args.input_file):
+        print(f"ERROR: Input file not found: {args.input_file}")
+        sys.exit(1)
+
+    out = generate_report(
+        results_path=args.input_file,
+        output_path=args.output,
+        title=args.title,
+    )
+    print(f"Wrote HTML report: {out}")
 
 
 # ── Subcommand: full ──────────────────────────────────────────────────────────
@@ -690,7 +745,7 @@ def cmd_full(args) -> None:
     print(f"  Min score: {args.min_score} | Industry: {args.industry}")
     print("-" * 40)
 
-    high_value, stage2_tokens = run_stage2(
+    high_value, stage2_tokens, _below_cap = run_stage2(
         candidates=candidates,
         ai_client=ai_score_client,
         min_score=args.min_score,
@@ -700,6 +755,7 @@ def cmd_full(args) -> None:
         checkpoint_file=args.checkpoint_file,
         executor=executor,
         skip_column_stats=args.skip_column_stats,
+        max_tables=getattr(args, "max_stage2_tables", None),
     )
     total_tokens += stage2_tokens
 
@@ -908,6 +964,13 @@ def main() -> None:
     score_opts.add_argument("--min-score", type=int, default=7,
                             help="Tables scoring >= this are 'high-value' (default: 7)")
     score_opts.add_argument(
+        "--max-stage2-tables", type=int, default=150, metavar="N",
+        help="Cap on tables sent to AI (default: 150). Tables ranked by "
+             "heuristic_score + 1.0*core_signature + 0.5*secondary_signature; "
+             "those below the cap are passed through with ai_scored=False. "
+             "Pass 0 to score every candidate (no cap).",
+    )
+    score_opts.add_argument(
         "--industry",
         choices=["biofuel", "manufacturing", "food_processing", "chemicals", "general"],
         default=os.getenv("INDUSTRY", "general"),
@@ -950,6 +1013,23 @@ def main() -> None:
                        help="Output file (default: results.json)")
 
     # ──────────────────────────────────────────────────────────────────────────
+    # report
+    # ──────────────────────────────────────────────────────────────────────────
+    p_report = sub.add_parser(
+        "report",
+        help="Generate a styled HTML report from a stage 3 results.json",
+        description="Reads a stage 3 results.json and produces a self-contained "
+                    "HTML report with coverage stats, concept distribution, "
+                    "market_risk distribution, and an expandable per-table view.",
+    )
+    p_report.add_argument("input_file", metavar="RESULTS_JSON",
+                          help="Path to results.json produced by 'dbscan annotate'")
+    p_report.add_argument("--output", default=None,
+                          help="Output HTML file (default: <input>.html)")
+    p_report.add_argument("--title", default=None,
+                          help="Report title (default: derived from folder name)")
+
+    # ──────────────────────────────────────────────────────────────────────────
     # full  (legacy)
     # ──────────────────────────────────────────────────────────────────────────
     p_full = sub.add_parser(
@@ -987,6 +1067,7 @@ def main() -> None:
         "score": cmd_score,
         "annotate": cmd_annotate,
         "full": cmd_full,
+        "report": cmd_report,
     }
     dispatch[args.command](args)
 

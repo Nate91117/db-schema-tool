@@ -22,26 +22,29 @@ class CandidateTable:
     date_columns: list[str]
     sample_values: list[str]
     heuristic_score: int
-    # New: structural metadata gathered in Stage 1
     primary_keys: list[str] = field(default_factory=list)
     foreign_keys: list[dict] = field(default_factory=list)
-    # New: column stats gathered in Stage 2 pre-processing
     column_stats: dict = field(default_factory=dict)
+    contract_signature: dict = field(default_factory=dict)
 
 
 @dataclass
 class ScoredTable:
-    """Stage 2 output — table scored by AI."""
+    """Stage 2 output — table scored by AI (or carried below the cap)."""
     name: str
     score: int
     reason: str
     likely_concept: str
     key_columns: list[str]
-    # Carried from Stage 1
     row_count: int = 0
     columns: list[ColumnInfo] = field(default_factory=list)
     primary_keys: list[str] = field(default_factory=list)
     foreign_keys: list[dict] = field(default_factory=list)
+    heuristic_score: int = 0
+    contract_signature: dict = field(default_factory=dict)
+    market_risk_score: int = 0
+    market_risk_rationale: str = ""
+    ai_scored: bool = True
 
 
 @dataclass
@@ -50,10 +53,13 @@ class SemanticTable:
     name: str
     description: str
     business_concept: str
-    columns: list[dict]  # [{name, description, data_type, business_meaning}]
-    relationships: list[dict]  # [{from_col, to_table, to_col, relationship_type}]
+    columns: list[dict]
+    relationships: list[dict]
     score: int
     row_count: int
+    market_risk_score: int = 0
+    market_risk_rationale: str = ""
+    contract_signature: dict = field(default_factory=dict)
 
 
 @dataclass

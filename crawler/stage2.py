@@ -24,6 +24,11 @@ from typing import TYPE_CHECKING
 
 from .ai_client import AIClient
 from .constants import get_stage2_system_prompt
+from .field_matcher import (
+    combined_pre_ai_score,
+    compute_contract_signature,
+    format_signature_for_prompt,
+)
 from .json_parser import parse_json_response
 from .types import CandidateTable, ColumnInfo, ScoredTable
 
@@ -148,15 +153,20 @@ def _scored_table_to_dict(t: ScoredTable) -> dict:
         ],
         "primary_keys": t.primary_keys,
         "foreign_keys": t.foreign_keys,
+        "heuristic_score": t.heuristic_score,
+        "contract_signature": t.contract_signature,
+        "market_risk_score": t.market_risk_score,
+        "market_risk_rationale": t.market_risk_rationale,
+        "ai_scored": t.ai_scored,
     }
 
 
 def _scored_table_from_dict(d: dict) -> ScoredTable:
     return ScoredTable(
         name=d["name"],
-        score=d["score"],
-        reason=d["reason"],
-        likely_concept=d["likely_concept"],
+        score=d.get("score", 0),
+        reason=d.get("reason", ""),
+        likely_concept=d.get("likely_concept", "unknown"),
         key_columns=d.get("key_columns", []),
         row_count=d.get("row_count", 0),
         columns=[
@@ -166,6 +176,11 @@ def _scored_table_from_dict(d: dict) -> ScoredTable:
         ],
         primary_keys=d.get("primary_keys", []),
         foreign_keys=d.get("foreign_keys", []),
+        heuristic_score=d.get("heuristic_score", 0),
+        contract_signature=d.get("contract_signature", {}),
+        market_risk_score=d.get("market_risk_score", 0),
+        market_risk_rationale=d.get("market_risk_rationale", ""),
+        ai_scored=d.get("ai_scored", True),
     )
 
 
@@ -216,7 +231,8 @@ def run_stage2(
     checkpoint_file: str = "stage2_checkpoint.json",
     executor: "QueryExecutor | None" = None,
     skip_column_stats: bool = False,
-) -> tuple[list[ScoredTable], int]:
+    max_tables: int | None = None,
+) -> tuple[list[ScoredTable], int, list[ScoredTable]]:
     """Score candidate tables using the configured AI model.
 
     Args:
@@ -229,12 +245,65 @@ def run_stage2(
         checkpoint_file:   Path to save/load batch progress
         executor:          Optional QueryExecutor for column stats (standalone: None)
         skip_column_stats: Skip column stats even if executor is provided
+        max_tables:        Cap how many tables get sent to the AI model. Tables
+                           below the cap are returned as below_cap with ai_scored=False
+                           (None = score every candidate)
 
     Returns:
-        (high_value_tables, total_tokens) — only tables scoring >= min_score
+        (high_value_tables, total_tokens, below_cap_tables)
     """
     total_tokens = 0
     all_scored: list[ScoredTable] = []
+
+    # ── Backfill contract signatures for any candidate missing one ───────────
+    # (e.g. when reading an older stage1.json that predates the field)
+    for c in candidates:
+        if not c.contract_signature:
+            c.contract_signature = compute_contract_signature(c.columns)
+
+    # ── Pre-AI ranking + cap ─────────────────────────────────────────────────
+    ranked = sorted(
+        candidates,
+        key=lambda c: combined_pre_ai_score(c.heuristic_score, c.contract_signature),
+        reverse=True,
+    )
+
+    if max_tables is not None and len(ranked) > max_tables:
+        to_score = ranked[:max_tables]
+        below_cap_candidates = ranked[max_tables:]
+        print(f"\n  Stage 2: Pre-AI ranking — {len(ranked)} candidates, "
+              f"sending top {len(to_score)} to AI; {len(below_cap_candidates)} "
+              f"below the cap will be passed through with ai_scored=False")
+        log.info(
+            "Stage 2: pre-AI cap %d applied (%d candidates -> %d to AI, %d below)",
+            max_tables, len(ranked), len(to_score), len(below_cap_candidates),
+        )
+    else:
+        to_score = ranked
+        below_cap_candidates = []
+        print(f"\n  Stage 2: Pre-AI ranking — sending all {len(ranked)} candidates to AI")
+
+    candidates = to_score
+
+    # Build below-cap pass-through entries (no AI tokens spent)
+    below_cap: list[ScoredTable] = []
+    for c in below_cap_candidates:
+        below_cap.append(ScoredTable(
+            name=c.name,
+            score=0,
+            reason="below stage-2 AI cap; ranked by heuristic + signature only",
+            likely_concept="unknown",
+            key_columns=[],
+            row_count=c.row_count,
+            columns=c.columns,
+            primary_keys=c.primary_keys,
+            foreign_keys=c.foreign_keys,
+            heuristic_score=c.heuristic_score,
+            contract_signature=c.contract_signature,
+            market_risk_score=0,
+            market_risk_rationale="",
+            ai_scored=False,
+        ))
 
     # ── Column stats (only when executor is available) ────────────────────────
     STATS_LIMIT = 500
@@ -333,9 +402,11 @@ def run_stage2(
           f"{len(high_value)} high-value (score >= {min_score})")
     for t in high_value:
         fk_str = f", {len(t.foreign_keys)} FKs" if t.foreign_keys else ""
-        print(f"    {t.name}: score={t.score}{fk_str}, concept={t.likely_concept} — {t.reason}")
+        mr_str = f", mr={t.market_risk_score}" if t.market_risk_score else ""
+        print(f"    {t.name}: score={t.score}{mr_str}{fk_str}, "
+              f"concept={t.likely_concept} — {t.reason}")
 
-    return high_value, total_tokens
+    return high_value, total_tokens, below_cap
 
 
 # ── Prompt builder ─────────────────────────────────────────────────────────────
@@ -346,6 +417,7 @@ def _build_batch_prompt(batch: list[CandidateTable]) -> str:
     for table in batch:
         lines.append(f"### {table.name}")
         lines.append(f"Row count: {table.row_count:,}")
+        lines.append(f"Heuristic score (table-name + structure): {table.heuristic_score}/10")
 
         if table.primary_keys:
             lines.append(f"Primary keys: {', '.join(table.primary_keys)}")
@@ -354,7 +426,7 @@ def _build_batch_prompt(batch: list[CandidateTable]) -> str:
 
         if table.foreign_keys:
             fk_parts = [
-                f"{fk['from_column']} → {fk['to_table']}.{fk['to_column']}"
+                f"{fk['from_column']} -> {fk['to_table']}.{fk['to_column']}"
                 for fk in table.foreign_keys[:8]
             ]
             lines.append(f"Foreign keys: {' | '.join(fk_parts)}")
@@ -366,7 +438,7 @@ def _build_batch_prompt(batch: list[CandidateTable]) -> str:
                 col_str += " [PK]"
             fk_targets = [fk for fk in table.foreign_keys if fk["from_column"] == col.name]
             if fk_targets:
-                col_str += f" [FK → {fk_targets[0]['to_table']}]"
+                col_str += f" [FK -> {fk_targets[0]['to_table']}]"
             if col.name in table.column_stats:
                 s = table.column_stats[col.name]
                 stat_parts = [f"null: {s['null_pct']}%", f"distinct: {s['distinct_count']:,}"]
@@ -380,6 +452,10 @@ def _build_batch_prompt(batch: list[CandidateTable]) -> str:
 
         if table.sample_values:
             lines.append(f"Sample values (col 2): {', '.join(str(v) for v in table.sample_values)}")
+
+        signature_block = format_signature_for_prompt(table.contract_signature)
+        if signature_block:
+            lines.append(signature_block)
 
         lines.append("")
 
@@ -421,6 +497,10 @@ def _parse_scores(raw_text: str, batch: list[CandidateTable]) -> list[ScoredTabl
                 columns=candidate.columns if candidate else [],
                 primary_keys=candidate.primary_keys if candidate else [],
                 foreign_keys=candidate.foreign_keys if candidate else [],
+                heuristic_score=candidate.heuristic_score if candidate else 0,
+                contract_signature=candidate.contract_signature if candidate else {},
+                market_risk_score=int(info.get("market_risk_score", 0)),
+                ai_scored=True,
             ))
         except Exception as e:
             print(f"  WARNING: Skipping {table_name} due to parse error: {e}")

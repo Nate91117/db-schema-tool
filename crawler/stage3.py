@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from .ai_client import AIClient
 from .constants import get_stage3_system_prompt
+from .field_matcher import format_signature_for_prompt
 from .json_parser import parse_json_response
 from .types import ColumnInfo, ScoredTable, SemanticTable
 
@@ -141,6 +142,9 @@ def _semantic_table_to_dict(t: SemanticTable) -> dict:
         "relationships": t.relationships,
         "score": t.score,
         "row_count": t.row_count,
+        "market_risk_score": t.market_risk_score,
+        "market_risk_rationale": t.market_risk_rationale,
+        "contract_signature": t.contract_signature,
     }
 
 
@@ -153,6 +157,9 @@ def _semantic_table_from_dict(d: dict) -> SemanticTable:
         relationships=d.get("relationships", []),
         score=d.get("score", 0),
         row_count=d.get("row_count", 0),
+        market_risk_score=d.get("market_risk_score", 0),
+        market_risk_rationale=d.get("market_risk_rationale", ""),
+        contract_signature=d.get("contract_signature", {}),
     )
 
 
@@ -341,8 +348,14 @@ def _build_inspection_prompt(table: ScoredTable, sample_rows: list[dict]) -> str
         f"AI relevance score: {table.score}/10",
         f"AI-assigned concept: {table.likely_concept}",
         f"AI scoring reason: {table.reason}",
+        f"market_risk_score (FINAL, do NOT change): {table.market_risk_score}/10",
         "",
     ]
+
+    signature_block = format_signature_for_prompt(table.contract_signature)
+    if signature_block:
+        lines.append(signature_block)
+        lines.append("")
 
     if table.primary_keys:
         lines.append(f"Primary keys: {', '.join(table.primary_keys)}")
@@ -407,20 +420,41 @@ def _parse_annotation(raw_text: str, table: ScoredTable) -> SemanticTable | None
         relationships=data.get("relationships", []),
         score=table.score,
         row_count=table.row_count,
+        market_risk_score=table.market_risk_score,
+        market_risk_rationale=data.get("market_risk_rationale", ""),
+        contract_signature=table.contract_signature,
     )
 
 
 def _build_semantic_layer(tables: list[SemanticTable]) -> dict:
     """Build the semantic layer dict — schema metadata only, no raw data."""
+    market_risk_overlay = sorted(
+        [
+            {
+                "table": t.name,
+                "market_risk_score": t.market_risk_score,
+                "market_risk_rationale": t.market_risk_rationale,
+                "business_concept": t.business_concept,
+            }
+            for t in tables
+            if t.market_risk_score > 0
+        ],
+        key=lambda r: r["market_risk_score"],
+        reverse=True,
+    )
     return {
-        "version": "1.1",
+        "version": "1.3",
         "table_count": len(tables),
+        "market_risk_overlay": market_risk_overlay,
         "tables": {
             t.name: {
                 "description": t.description,
                 "business_concept": t.business_concept,
                 "row_count": t.row_count,
                 "relevance_score": t.score,
+                "market_risk_score": t.market_risk_score,
+                "market_risk_rationale": t.market_risk_rationale,
+                "contract_signature": t.contract_signature,
                 "columns": t.columns,
                 "relationships": t.relationships,
             }

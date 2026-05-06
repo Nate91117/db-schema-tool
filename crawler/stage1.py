@@ -18,6 +18,7 @@ from .constants import (
     NOISE_PREFIXES,
     EXTENSION_PREFIXES,
 )
+from .field_matcher import compute_contract_signature
 from .types import ColumnInfo, CandidateTable
 
 
@@ -135,9 +136,9 @@ def run_stage1(
         if len(columns) > 20:
             score += 1
 
-        if score < 2:
-            filtered_out[table] = "low_score"
-            continue
+        # No low-score kill filter — heuristic_score is informational only.
+        # Stage 2 combines it with the contract-field signature to rank
+        # candidates before paying for AI scoring.
 
         # ── PK and FK detection (cheap info-schema queries) ────────────────
         primary_keys: list[str] = []
@@ -151,6 +152,8 @@ def run_stage1(
         except Exception:
             pass
 
+        signature = compute_contract_signature(columns)
+
         candidates.append(
             CandidateTable(
                 name=table,
@@ -162,6 +165,7 @@ def run_stage1(
                 heuristic_score=score,
                 primary_keys=primary_keys,
                 foreign_keys=foreign_keys,
+                contract_signature=signature,
             )
         )
 

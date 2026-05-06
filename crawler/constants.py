@@ -52,7 +52,9 @@ NOISE_PREFIXES = [
 ]
 
 # Custom/extension table prefixes — score bonus (common in Dynamics AX)
-EXTENSION_PREFIXES = ["Z", "X", "CUS", "ISV"]
+# IRGN is the grain operation prefix in this client database; treat it as
+# custom even though it doesn't fit the Z/X convention.
+EXTENSION_PREFIXES = ["Z", "X", "CUS", "ISV", "IRGN"]
 
 
 # ── Stage 2: Industry context ─────────────────────────────────────────────────
@@ -109,43 +111,139 @@ INDUSTRY_CONTEXTS: dict[str, str] = {
 
 
 def get_stage2_system_prompt(industry: str = "biofuel", memory_context: str = "") -> str:
-    """Return the Stage 2 scoring system prompt for the given industry."""
+    """Return the Stage 2 scoring system prompt for the given industry.
+
+    Stage 2 assigns two independent scores per table:
+      - score (1-10): overall business relevance
+      - market_risk_score (0-10): commodity-position exposure
+    Plus a primary likely_concept from a fixed taxonomy.
+    """
     context = INDUSTRY_CONTEXTS.get(industry, INDUSTRY_CONTEXTS["biofuel"])
     industry_label = industry.replace("_", " ").title()
 
     return f"""You are building a semantic data layer for a {industry_label} company's ERP system.
-Your job is to score database tables for relevance to business operations.
+Your job is to score database tables on TWO independent dimensions and to assign each
+table to a primary business concept.
 
 {context}
 {memory_context}
-You will receive table metadata including:
-- Row count and primary keys
-- Foreign key relationships (from the actual DB schema)
+You will receive, per table:
+- Row count, primary keys, foreign key relationships (from the actual DB schema)
 - Columns with data types
-- Column statistics: null %, distinct count, numeric range (from a sample)
+- Optional column statistics: null %, distinct count, numeric range
+- A pre-computed CONTRACT/POSITION FIELD SIGNATURE listing which contract-style
+  fields the column names already match. Use this as concrete evidence — the
+  signature is computed in code, not invented.
 
-Use this information to score each table's business relevance.
-Tables with many nulls on key columns, very low distinct counts, or nonsensical ranges may be noise.
-Tables with rich FK relationships to other tables, date columns, and numeric amounts are usually valuable.
+============================================================
+DIMENSION 1: overall relevance score (1-10)
+============================================================
+Use this for the `score` field — how useful this table is for understanding
+the business in general.
 
-Return ONLY a JSON object. No preamble, no explanation outside the JSON.
-
-Format:
-{{
-  "TABLE_NAME": {{
-    "score": <1-10>,
-    "reason": "<one sentence explaining the score>",
-    "likely_concept": "<inventory|production|rin|pricing|vendor|customer|finance|planning|quality|noise|unknown>",
-    "key_columns": ["col1", "col2", "col3"]
-  }}
-}}
-
-Score guide:
   9-10  Core transactional table (inventory movements, production batches, invoices)
   7-8   Important reference or header table (item master, vendor master, order headers)
   5-6   Possibly useful — setup, configuration, or status data
   3-4   Low value — mostly codes, lookups, or metadata
-  1-2   Noise — system tables, logs, or completely irrelevant
+  1-2   Noise — system tables, logs, or irrelevant
+
+============================================================
+DIMENSION 2: market_risk_score (0-10) — INDEPENDENT of score above
+============================================================
+A table can have likely_concept="counterparty" and still score 8 on market_risk.
+
+Market risk = exposure to commodity-price movement on positions whose settled
+value can still change with price. A "position" is anything in one of three
+states:
+  - INVENTORY: physical commodity owned but not yet sold/settled (in-process
+    tickets, unpriced receipts, DPR balances, in-storage stock)
+  - PURCHASES: active purchase contracts with live delivery obligations or
+    pricing still to be applied
+  - SALES: active sales contracts with live delivery obligations or pricing
+    still to be applied
+
+Tables that drive position math also count: priced-vs-unpriced state,
+basis/futures offsets, hedge registers, settlement transactions that close
+exposure, load reconciliations that flip inventory ownership.
+
+Custom/extension tables — anything with a non-standard prefix such as IRGN,
+Z, X, CUS, or ISV — are far more likely to encode commodity-position logic
+specific to the business operation. Native Dynamics modules (GL*, PM*, RM*,
+IV*, SOP*, and standard AX tables like INVENT*, PURCH*, SALES* without a
+custom prefix) record the financial *result* of risk, not the risk itself,
+and almost always score 0-3.
+
+How to use the contract field signature:
+  6+ core matches  -> strong contract/position table -> market_risk_score 7+
+  3-5 core matches -> contributor table              -> market_risk_score 4-6
+  0-2 core matches with no secondary matches         -> 0-3
+
+market_risk_score guide:
+   9-10  Core exposure: open/unsettled inventory or tickets, DPR balances,
+         active contract delivery schedules and contract pricing, hedge/
+         futures position registers, "WORK" tables holding in-process
+         physical receipts
+   7-8   Direct contributors: settlement transactions (including voids and
+         advances), ticket detail/pricing/discount tables that change settled
+         value, load shipments and reconciliations that flip inventory
+         ownership, priced inventory movement tables
+   4-6   Peripheral context: vendor/customer masters (counterparties),
+         quality and grade factors (adjust settled value), finished-goods
+         inventory where price is locked
+   1-3   Barely touches risk: GL entries, AP/AR balances, journal lines
+         (the financial result of risk, not the risk itself), reference
+         lookups joined into risk reports
+   0     No relevance: system/audit, security, workflow, HR, payroll,
+         fixed-assets, project accounting, pure setup/config
+
+Default to 0 unless the table clearly meets a tier above. Do NOT inflate
+the score to be helpful — most ERP tables score 0.
+
+============================================================
+likely_concept TAXONOMY
+============================================================
+Pick the SINGLE best fit. Concepts are independent of market_risk_score.
+
+  inventory     Physical stock state and movements: receipts, tickets,
+                load shipments, in-process WORK, balances, transfers
+  production    Manufacturing/processing: batches, assemblies, work orders,
+                BOM, formula records, yield/output
+  contracts     Purchase or sales contracts with delivery obligations:
+                contract headers, delivery schedules, amendments, version
+                history, contract programs. NOT settlement, NOT pricing.
+  pricing       Price calculations and adjustments: contract pricing,
+                hedging detail, basis/futures offsets, discount schedules,
+                freight rates, settlement transactions that change value
+  counterparty  Master/reference data for vendors, customers, suppliers:
+                IDs, names, addresses, payment terms, bank info, credit
+                limits. Vendor and customer roles BOTH live here.
+  finance       AP/AR/GL plumbing: journals, ledger entries, vouchers,
+                check registers, tax tables, financial result of business
+  setup         Configuration and lookup data: calendars, codes, user
+                defaults, shipping methods, region/branch lookups, system
+                parameters. Does not hold transactions or positions.
+  quality       Grade factors, quality grades, lab tests, inspections,
+                discount-grade matrices that affect commodity value
+  audit_log     Change history, comments, amendment trails, narrative
+                logs. No quantitative position/transaction data.
+  noise         System internals, security, workflow, HR/payroll, retail,
+                pure plumbing with no business meaning
+  unknown       Genuinely cannot determine from the available metadata
+
+============================================================
+OUTPUT
+============================================================
+Return ONLY a JSON object. No preamble, no explanation outside the JSON.
+
+{{
+  "TABLE_NAME": {{
+    "score": <1-10>,
+    "likely_concept": "<inventory|production|contracts|pricing|counterparty|finance|setup|quality|audit_log|noise|unknown>",
+    "market_risk_score": <0-10>,
+    "reason": "<one sentence explaining the score>",
+    "key_columns": ["col1", "col2", "col3"]
+  }}
+}}
 """
 
 
@@ -159,15 +257,22 @@ For each table, generate a rich annotation that a business analyst or AI agent c
 
 You will receive:
 - Table name, row count, AI relevance score
+- AI-assigned market_risk_score (0-10) and the contract/position field signature used to derive it
 - All columns with data types
 - Confirmed foreign key relationships (from the actual DB schema — use these, don't guess)
 - Sample rows showing real data
+
+The market_risk_score was assigned in Stage 2 and is FINAL. Do not change it.
+You must write a one-sentence `market_risk_rationale` explaining what gives this
+table that score (or why the score is 0). The rationale is required if score >= 1
+and may be a brief "no commodity-position exposure" if score == 0.
 
 Return ONLY a JSON object with this exact format:
 {{
   "table_name": "ACTUAL_TABLE_NAME",
   "description": "Plain English description of what this table stores and its business purpose",
-  "business_concept": "inventory|production|rin|pricing|vendor|customer|finance|planning|quality",
+  "business_concept": "inventory|production|contracts|pricing|counterparty|finance|setup|quality|audit_log",
+  "market_risk_rationale": "<one sentence explaining the market_risk_score>",
   "columns": [
     {{
       "name": "COLUMN_NAME",

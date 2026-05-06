@@ -8,3 +8,6 @@ test_results.json
 *.log
 *_checkpoint.json
 db_schema_tool.egg-info/
+*.bat
+.DS_Store
+run*results/
