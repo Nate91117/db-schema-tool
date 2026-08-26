@@ -100,6 +100,18 @@ INDUSTRY_CONTEXTS: dict[str, str] = {
 - Hazardous material tracking and reporting
 - Custom extension tables""",
 
+    "refined_products": """We care about data related to:
+- Physical supply and distribution: terminals, racks, tanks, pipelines, bills of lading (BOL), carriers, freight
+- Products and grades: gasoline, diesel, ULSD, heating oil, jet, blendstocks — product codes and specifications
+- Deals and contracts: forward purchase/sale agreements, deal numbers, amendments, pricing terms
+- Whether records are forward positions or settled/invoiced volume — and how amendments are stored (restated vs. versioned)
+- Pricing: index-priced deals (NYMEX, rack, OPIS-style), price basis and differentials, provisional vs. final pricing
+- Inventory by terminal/tank and in-transit product
+- Exchange agreements, throughput, and terminal position
+- Taxes and fees on movements (excise, tariffs) as invoice components
+- Customer and vendor invoices tied back to deals and BOL/ticket movements
+- Custom extension tables""",
+
     "general": """We care about data related to:
 - Core business transactions (orders, invoices, receipts, payments)
 - Inventory and stock management

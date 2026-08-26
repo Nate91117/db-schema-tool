@@ -17,12 +17,12 @@ from .types import ColumnInfo
 # Core fields — presence of many strongly suggests a position/contract table.
 CORE_FIELD_PATTERNS: dict[str, list[str]] = {
     "deal_number":       ["DEAL", "CONTRACT", "CTRNUM", "CTRACT", "CONTRACTNO", "CTR"],
-    "schedule_number":   ["SCHED", "DELSCHED", "DELIVERYNO"],
+    "schedule_number":   ["SCHED", "DELSCHED", "DELIVERYNO", "BOLNUM", "BOLNO", "LADING", "TICKET", "LIFTING"],
     "counterparty_id":   ["VENDORID", "CUSTOMERID", "SUPPLIERID", "CPTYID", "VENDID", "CUSTID"],
     "counterparty_name": ["VENDORNAME", "CUSTOMERNAME", "SUPPLIERNAME", "CPTYNAME"],
-    "quantity":          ["QTY", "QUANTITY", "BUSHEL", "WEIGHT", "VOLUME", "NETWT"],
-    "commodity":         ["COMMODITY", "PRODUCT", "ITEMID", "ITEMCODE", "GRADE", "CROP"],
-    "location":          ["LOCATION", "FACILITY", "ELEVATOR", "WAREHOUSE", "SITE", "BIN"],
+    "quantity":          ["QTY", "QUANTITY", "BUSHEL", "WEIGHT", "VOLUME", "NETWT", "GALLON", "BARREL", "BBL"],
+    "commodity":         ["COMMODITY", "PRODUCT", "ITEMID", "ITEMCODE", "GRADE", "CROP", "FUEL", "MATERIAL"],
+    "location":          ["LOCATION", "FACILITY", "ELEVATOR", "WAREHOUSE", "SITE", "BIN", "TERMINAL", "RACK", "TANK", "PLANT", "DEPOT"],
     "position_month":    ["POSITIONMONTH", "DELIVERYMONTH", "DELMONTH", "POSMONTH", "PERIOD"],
     "status":            ["STATUS", "STATE"],
     "execution_qty":     ["DELIVERED", "FULFILLED", "REMAINING", "OPENBAL", "OPENQTY", "DELQTY"],
@@ -31,10 +31,10 @@ CORE_FIELD_PATTERNS: dict[str, list[str]] = {
 # Secondary fields — refine the score (price exposure, hedging metadata).
 SECONDARY_FIELD_PATTERNS: dict[str, list[str]] = {
     "contract_price":    ["CONTRACTPRICE", "CTRPRICE", "DEALPRICE"],
-    "market_price":      ["MARKETPRICE", "MKTPRICE", "CASHPRICE", "SPOTPRICE"],
+    "market_price":      ["MARKETPRICE", "MKTPRICE", "CASHPRICE", "SPOTPRICE", "RACKPRICE", "INDEXPRICE"],
     "futures_price":     ["FUTURESPRICE", "FUTPRICE"],
     "basis_price":       ["BASIS", "BASISPRICE"],
-    "other_price":       ["FREIGHT", "DISCOUNT", "PREMIUM", "ADJUSTMENT"],
+    "other_price":       ["FREIGHT", "DISCOUNT", "PREMIUM", "ADJUSTMENT", "TARIFF", "EXCISE", "SURCHARGE"],
     "futures_month":     ["FUTURESMONTH", "FUTMONTH", "CONTRACTMONTH"],
 }
 

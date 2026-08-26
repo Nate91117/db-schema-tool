@@ -942,7 +942,7 @@ def main() -> None:
                             help="Min row count to keep a table (default: 10)")
     crawl_opts.add_argument(
         "--industry",
-        choices=["biofuel", "manufacturing", "food_processing", "chemicals", "general"],
+        choices=["biofuel", "manufacturing", "food_processing", "chemicals", "refined_products", "general"],
         default=os.getenv("INDUSTRY", "general"),
     )
     p_crawl.add_argument("--output", default="stage1.json",
@@ -972,7 +972,7 @@ def main() -> None:
     )
     score_opts.add_argument(
         "--industry",
-        choices=["biofuel", "manufacturing", "food_processing", "chemicals", "general"],
+        choices=["biofuel", "manufacturing", "food_processing", "chemicals", "refined_products", "general"],
         default=os.getenv("INDUSTRY", "general"),
     )
     score_opts.add_argument("--batch-delay", type=float, default=1.0, metavar="SECONDS",
@@ -1002,7 +1002,7 @@ def main() -> None:
                           help="Limit to top N tables (cost control)")
     ann_opts.add_argument(
         "--industry",
-        choices=["biofuel", "manufacturing", "food_processing", "chemicals", "general"],
+        choices=["biofuel", "manufacturing", "food_processing", "chemicals", "refined_products", "general"],
         default=os.getenv("INDUSTRY", "general"),
     )
     ann_opts.add_argument("--batch-delay", type=float, default=1.0, metavar="SECONDS",
@@ -1051,7 +1051,7 @@ def main() -> None:
     )
     full_opts.add_argument(
         "--industry",
-        choices=["biofuel", "manufacturing", "food_processing", "chemicals", "general"],
+        choices=["biofuel", "manufacturing", "food_processing", "chemicals", "refined_products", "general"],
         default=os.getenv("INDUSTRY", "general"),
     )
     full_opts.add_argument("--batch-delay", type=float, default=1.0)
